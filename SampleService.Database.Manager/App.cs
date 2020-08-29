@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -23,13 +24,15 @@ namespace SampleService.Database.Manager
         }
 
  
-        public Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
             logger.LogInformation($"App run {appSettings.ConnectionStrings.DefaultConnection}");
 
-            Console.ReadLine();
+            logger.LogInformation($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [START]\t\tDatabase migration ");
+            await dataContext.Database.MigrateAsync(cancellationToken);
+            logger.LogInformation($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [COMPLETE]\t\tDatabase migration");
 
-            return Task.CompletedTask;
+            Console.ReadLine();
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
