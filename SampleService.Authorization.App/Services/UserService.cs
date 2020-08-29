@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -8,11 +10,15 @@ using SampleService.Models;
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SampleService.Authorization.App.Services
@@ -24,6 +30,12 @@ namespace SampleService.Authorization.App.Services
         bool RevokeToken(string token, string ipAddress);
         IEnumerable<User> GetAll();
         User GetById(string id);
+
+        Task<AppResponse> CreateAsync(CreateUserRequest model, CancellationToken cancellationToken = default(CancellationToken));
+
+        Task<AppResponse> UpdateAsync(UpdateUserRequest user, CancellationToken cancellationToken = default(CancellationToken));
+
+        Task<AppResponse> CloseAccountAsync(CloseAccountRequest user, CancellationToken cancellationToken = default(CancellationToken));
     }
 
     public class UserService : IUserService
@@ -53,44 +65,78 @@ namespace SampleService.Authorization.App.Services
         /// <returns></returns>
         public AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress)
         {
-            if (String.IsNullOrWhiteSpace(model.UserName))
-            {
-                logger.LogInformation($"{nameof(AuthenticateRequest.UserName)} is empty.");
-                throw new ArgumentException("The username is required.", nameof(AuthenticateRequest.UserName));
-            }
-            if (String.IsNullOrWhiteSpace(model.Password))
-            {
-                logger.LogInformation($"{nameof(AuthenticateRequest.Password)} is empty.");
-                throw new ArgumentException("The password is required.", nameof(AuthenticateRequest.Password));
-            }
-
-            var user = dataContext.Users.Where(x => x.UserName == model.UserName).FirstOrDefault();
-
-            if (user == null)
-            {
-                return null;
-            }
-
-            if (!hasher.Verify(user.Password, model.Password))
-            {
-                return null;
-            }
-            var jwtToken = GenerateJwtToken(user);
-            var refreshToken = GenerateRefreshToken(ipAddress);
-
-            user.RefreshTokens.Add(refreshToken);
-            dataContext.Update(user);
             try
             {
-                dataContext.SaveChanges();
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Could not save token data.");
-                return null;
-            }
 
-            return CreateAuthenticateResponse(user, jwtToken, refreshToken.Token);
+                if (String.IsNullOrWhiteSpace(model.Username))
+                {
+                    logger.LogInformation($"{nameof(AuthenticateRequest.Username)} is empty.");
+                    throw new ArgumentException("The username is required.", nameof(AuthenticateRequest.Username));
+                }
+                if (String.IsNullOrWhiteSpace(model.Password))
+                {
+                    logger.LogInformation($"{nameof(AuthenticateRequest.Password)} is empty.");
+                    throw new ArgumentException("The password is required.", nameof(AuthenticateRequest.Password));
+                }
+
+                var user = dataContext
+                    .Users
+                    .Include(x=>x.RefreshTokens)
+                    .Where(x => x.UserName == model.Username)
+                    .FirstOrDefault();
+
+                if (user == null)
+                {
+                    return new AuthenticateResponse
+                    {
+                        Status = HttpStatusCode.NotFound,
+                        Message = "Could not find a user",
+                    };
+                }
+
+                if (!hasher.VerifyHashedPassword(user.Password, model.Password))
+                {
+                    user.FailCount += 1;
+
+                    if (user.FailCount > 5)
+                    {
+                        user.IsLocked = true;
+                    }
+
+                    dataContext.Update(user);
+
+                    return new AuthenticateResponse
+                    {
+                        Status = HttpStatusCode.NotFound,
+                        Message = "Could not find a user",
+                    };
+                }
+
+
+                var jwtToken = GenerateJwtToken(user);
+                var refreshToken = GenerateRefreshToken(ipAddress);
+
+                user.RefreshTokens.Add(refreshToken);
+                dataContext.Update(user);
+
+
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.OK,
+                    Data = CreateAuthenticateResponse(user, jwtToken, refreshToken.Token),
+                };
+            }
+            finally
+            {
+                try
+                {
+                    dataContext.SaveChanges();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Could not save token data.");
+                }
+            }
         }
 
         public IEnumerable<User> GetAll()
@@ -108,6 +154,11 @@ namespace SampleService.Authorization.App.Services
         public User GetById(string id)
         {
             return dataContext.Users.FirstOrDefault(x => x.Id == id);
+        }
+
+        public User GetByUsername(string username)
+        {
+            return dataContext.Users.FirstOrDefault(x => x.UserName == username);
         }
 
         /// <summary>
@@ -128,12 +179,20 @@ namespace SampleService.Authorization.App.Services
             var refreshToken = user.RefreshTokens.FirstOrDefault(x => x.Token == token);
             if(refreshToken == null)
             {
-                return null;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
             }
 
             if (!refreshToken.IsActive)
             {
-                return null;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
             }
 
             var jwtToken = GenerateJwtToken(user);
@@ -153,10 +212,18 @@ namespace SampleService.Authorization.App.Services
             catch (Exception ex)
             {
                 logger.LogError(ex, "Could not save the new refresh token data");
-                return null;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.InternalServerError,
+                    Message = "Could not save the new refresh token data",
+                };
             }
 
-            return CreateAuthenticateResponse(user, jwtToken, newRefreshToken.Token);
+            return new AuthenticateResponse
+            {
+                Status = HttpStatusCode.OK,
+                Data = CreateAuthenticateResponse(user, jwtToken, newRefreshToken.Token),
+            };
         }
 
         /// <summary>
@@ -204,24 +271,100 @@ namespace SampleService.Authorization.App.Services
             return true;
         }
 
+        public async Task<AppResponse> CreateAsync(CreateUserRequest model, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var userFindResult = GetByUsername(model.UserName);
+            if (userFindResult != null)
+            {
+                return new CreateUserResponse
+                {
+                    Message = $"Another user has taken [{model.UserName}]",
+                    Status = HttpStatusCode.BadRequest,
+                };
+            }
+
+            var passwordHashed = hasher.HashPassword(model.Password);
+            var user = new User
+            {
+                FirstName = model.FirstName,
+                LastName = model.LastName,
+                UserName = model.UserName,
+                Password = passwordHashed,
+                IsEnabled = true,
+                IsLocked = false,
+                FailCount = 0,
+            };
+
+            dataContext.Add(user);
+
+            await dataContext.SaveChangesAsync(cancellationToken);
+
+            return new CreateUserResponse { Status = HttpStatusCode.Created, };
+        }
+
+        public async Task<AppResponse> UpdateAsync(UpdateUserRequest model, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var user = GetByUsername(model.UserName);
+
+            if (user == null)
+            {
+                return new AppResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
+            }
+
+            user.FirstName = model.FirstName;
+            user.LastName = model.LastName;
+
+            dataContext.Update(user);
+
+            await dataContext.SaveChangesAsync(cancellationToken);
+
+            return new AppResponse { Status = HttpStatusCode.Accepted };
+        }
+
+        public async Task<AppResponse> CloseAccountAsync(CloseAccountRequest model, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var user = GetByUsername(model.UserName);
+
+            if (user != null)
+            {
+                return new AppResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
+            }
+            user.IsEnabled = false;
+
+            dataContext.Update(user);
+
+            await dataContext.SaveChangesAsync(cancellationToken);
+
+            return new AppResponse { Status = HttpStatusCode.Accepted };
+        }
+
         /// <summary>
         /// Generate JWT token
         /// </summary>
         /// <param name="user">user</param>
         /// <returns></returns>
-        private string GenerateJwtToken (User user)
+        private string GenerateJwtToken(User user)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.UTF8.GetBytes(appSettings.Secret);
-            var tokenDescriptor = new SecurityTokenDescriptor {
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
                 Subject = new ClaimsIdentity(new Claim[] {
-                    new Claim(ClaimTypes.Name, user.Id) 
+                    new Claim(ClaimTypes.Name, user.Id)
                 }),
                 Expires = DateTimeOffset.UtcNow.AddMinutes(15).UtcDateTime,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
-            
+
             return tokenHandler.WriteToken(token);
         }
 
@@ -247,9 +390,9 @@ namespace SampleService.Authorization.App.Services
             }
         }
 
-        private AuthenticateResponse CreateAuthenticateResponse(User user, string jwtToken, string refreshToken)
+        private AuthenticateInnerResponse CreateAuthenticateResponse(User user, string jwtToken, string refreshToken)
         {
-            return new AuthenticateResponse
+            return new AuthenticateInnerResponse
             {
                 Id = user.Id,
                 FirstName = user.FirstName,
