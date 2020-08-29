@@ -19,6 +19,7 @@ namespace SampleService.Data.EntityTypeConfiguration
                 .Property(x => x.Id)
                 .HasMaxLength(StringLengths.Identifier)
                 .IsRequired()
+                .ValueGeneratedOnAdd()
                 .HasComment("식별자")
                 ;
             builder
@@ -43,7 +44,23 @@ namespace SampleService.Data.EntityTypeConfiguration
                 .Property(x => x.Password)
                 .HasMaxLength(StringLengths.Long)
                 .HasComment("비밀번호")
-                ;                
+                ;
+            builder
+                .Property(x => x.IsEnabled)
+                .HasDefaultValue(true)
+                .HasComment("사용여부")
+                ;
+            builder
+                .Property(x => x.FailCount)
+                .HasDefaultValue(0)
+                .HasComment("인증 실패수")
+                ;
+            builder
+                .Property(x => x.IsLocked)
+                .HasDefaultValue(false)
+                .HasComment("계정 잠금 여부")
+                ;
+
         }
     }
 }

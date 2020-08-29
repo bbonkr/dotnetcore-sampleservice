@@ -20,6 +20,7 @@ namespace SampleService.Data.EntityTypeConfiguration
                 .Property(x => x.Id)
                 .HasMaxLength(StringLengths.Identifier)
                 .IsRequired()
+                .ValueGeneratedOnAdd()
                 .HasComment("식별자")
                 ;
             builder
