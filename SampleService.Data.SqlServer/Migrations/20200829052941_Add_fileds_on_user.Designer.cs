@@ -3,15 +3,17 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SampleService.Data;
 
 namespace SampleService.Data.SqlServer.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20200829052941_Add_fileds_on_user")]
+    partial class Add_fileds_on_user
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,7 +24,6 @@ namespace SampleService.Data.SqlServer.Migrations
             modelBuilder.Entity("SampleService.Entities.RefreshToken", b =>
                 {
                     b.Property<string>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(36)")
                         .HasComment("식별자")
                         .HasMaxLength(36);
@@ -77,7 +78,6 @@ namespace SampleService.Data.SqlServer.Migrations
             modelBuilder.Entity("SampleService.Entities.User", b =>
                 {
                     b.Property<string>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(36)")
                         .HasComment("식별자")
                         .HasMaxLength(36);
