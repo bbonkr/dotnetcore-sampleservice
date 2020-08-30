@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Authorization;
@@ -14,8 +15,8 @@ namespace SampleService.Authorization.App.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("[controlller]")]
-    public class UsersController:ControllerBase
+    [Route("api/[controller]")]
+    public class UsersController:AppApiController
     {
         private readonly IUserService userService;
 
@@ -30,17 +31,14 @@ namespace SampleService.Authorization.App.Controllers
         {
             var response = userService.Authenticate(model, GetIpAddress());
 
-            if(response == null)
+            if (!response.IsSuccessful)
             {
-                return BadRequest(new MessageResponse
-                {
-                    Message = "Check your Username and Password",
-                });
+                return StatusCodeResult(HttpStatusCode.BadRequest, "Check your Username and Password");
             }
 
-            SetTokenCookie(response.RefreshToken);
+            SetTokenCookie(response.Data.RefreshToken);
 
-            return Ok(response);
+            return StatusCodeResult(response);
         }
 
         [AllowAnonymous]
@@ -49,56 +47,38 @@ namespace SampleService.Authorization.App.Controllers
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
-            if(String.IsNullOrWhiteSpace(token))
+            if (String.IsNullOrWhiteSpace(token))
             {
-                return BadRequest(new MessageResponse
-                {
-                    Message = "Token is Required",
-                });
+                return StatusCodeResult(HttpStatusCode.BadRequest, "Token is required.");
             }
 
             var response = userService.RefreshToken(token, GetIpAddress());
 
-            if(response == null)
+            if (!response.IsSuccessful)
             {
-                return Unauthorized(new MessageResponse
-                {
-                    Message = "Invalid token",
-                });
+
+                return StatusCodeResult(HttpStatusCode.Unauthorized, "Invalid token");
             }
 
-            SetTokenCookie(response.RefreshToken);
+            SetTokenCookie(response.Data.RefreshToken);
 
-            return Ok(response);
+            return StatusCodeResult(response);
         }
 
+        [HttpPost("revoke-token")]
         public IActionResult Revoke([FromBody] RevokeTokenRequest model)
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
-
             if (String.IsNullOrWhiteSpace(token))
             {
-                return BadRequest(new MessageResponse
-                {
-                    Message = "Token is Required",
-                });
+
+                return StatusCodeResult(HttpStatusCode.BadRequest, "Token is Required");
             }
 
-            var result = userService.RevokeToken(token, GetIpAddress());
+            var response = userService.RevokeToken(token, GetIpAddress());
 
-            if (!result)
-            {
-                return NotFound(new MessageResponse
-                {
-                    Message = "Token not found",
-                });
-            }
-
-            return Ok(new MessageResponse
-            {
-                Message = "Token is revoked",
-            });
+            return StatusCodeResult(response);
         }
 
         [HttpGet]
@@ -106,22 +86,23 @@ namespace SampleService.Authorization.App.Controllers
         {
             var users = userService.GetAll();
 
-            return Ok(users);
+            return StatusCodeResult(HttpStatusCode.OK, users);
         }
 
         [HttpGet("{id}")]
         public IActionResult GetById(string id)
         {
+            var status = HttpStatusCode.OK;
+            var message = "";
+
             var user = userService.GetById(id);
             if (user == null)
             {
-                return NotFound(new MessageResponse
-                {
-                    Message = "Could not find a user"
-                });
+                status = HttpStatusCode.NotFound;
+                message = "Could not find a user";
             }
 
-            return Ok(user);
+            return StatusCodeResult(status, user, message);
         }
 
         [HttpGet("{id}/refresh-tokens")]
@@ -130,13 +111,24 @@ namespace SampleService.Authorization.App.Controllers
             var user = userService.GetById(id);
             if(user == null)
             {
-                return NotFound(new MessageResponse
-                {
-                    Message = "Could not find a user"
-                });
+                return StatusCodeResult(HttpStatusCode.NotFound, "Could not find a user");
             }
 
-            return Ok(user.RefreshTokens);
+            return StatusCodeResult(HttpStatusCode.OK, user.RefreshTokens);
+        }
+
+        [AllowAnonymous]
+        [HttpPut]
+        public async Task<IActionResult> CreateUserAsync([FromBody] CreateUserRequest model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return StatusCodeResult(HttpStatusCode.BadRequest, "Invalid request body");
+            }
+
+            var response = await userService.CreateAsync(model);
+
+            return StatusCodeResult(response);
         }
 
         private void SetTokenCookie(string token)

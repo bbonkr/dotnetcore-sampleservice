@@ -68,7 +68,7 @@ namespace SampleService.Database.Manager
                     //Configure Logging
                     logging.AddConsole();
                 })
-                .UseConsoleLifetime(options => { });
+                .UseConsoleLifetime(options => {});
 
     }
 }

@@ -33,7 +33,14 @@ namespace SampleService.Authorization.App
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<DataContext>(x => x.UseInMemoryDatabase("SampleDatabase"));
+            //services.AddDbContext<DataContext>(x => x.UseInMemoryDatabase("SampleDatabase"));
+            var defaultConnection = Configuration.GetConnectionString("DefaultConnection");
+            services.AddDbContext<DataContext>(x =>
+            {
+                x.UseSqlServer(defaultConnection, options => {
+                    options.MigrationsAssembly("SampleService.Data.SqlServer");
+                });
+            });
 
             services.AddCors();
 
@@ -85,8 +92,10 @@ namespace SampleService.Authorization.App
             {
                 app.UseDeveloperExceptionPage();
             }
-
-            app.UseHttpsRedirection();
+            else
+            {
+                app.UseHttpsRedirection();
+            }
 
             app.UseRouting();
 
