@@ -14,21 +14,39 @@ namespace SampleService.Authorization.App
 {
     public class AppApiController: ControllerBase
     {
-        protected ObjectResult StatusCodeResult(HttpStatusCode status, string message)
+        protected ObjectResult StatusCodeResult<T>(int status, T data, string message = "")
         {
-            return StatusCodeResult((int)status, message);
+            return StatusCodeResult((HttpStatusCode)status, data, message);
         }
+
+        protected ObjectResult StatusCodeResult<T>(HttpStatusCode status, T data, string message = "")
+        {
+         
+            return StatusCodeResult(new AppResponse<T>
+            {
+                Status = status,
+                Message = message,
+                Data = data,
+            });
+        }
+
         protected ObjectResult StatusCodeResult(int status, string message)
         {
-            return StatusCode(status, new MessageResponse
+            return StatusCodeResult((HttpStatusCode)status, message);
+        }
+
+        protected ObjectResult StatusCodeResult(HttpStatusCode status, string message)
+        {
+            return StatusCodeResult(new AppResponse
             {
+                Status = status,
                 Message = message,
             });
         }
 
         protected ObjectResult StatusCodeResult(AppResponse response)
         {
-            return StatusCodeResult(response.StatusCode, response.Message);
+            return StatusCode(response.StatusCode, response);
         }
     }
 }

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -10,8 +9,6 @@ using SampleService.Models;
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Net;
@@ -27,7 +24,7 @@ namespace SampleService.Authorization.App.Services
     {
         AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress);
         AuthenticateResponse RefreshToken(string token, string ipAddress);
-        bool RevokeToken(string token, string ipAddress);
+        AuthenticateResponse RevokeToken(string token, string ipAddress);
         IEnumerable<User> GetAll();
         User GetById(string id);
 
@@ -81,7 +78,7 @@ namespace SampleService.Authorization.App.Services
 
                 var user = dataContext
                     .Users
-                    .Include(x=>x.RefreshTokens)
+                    .Include(x => x.RefreshTokens)
                     .Where(x => x.UserName == model.Username)
                     .FirstOrDefault();
 
@@ -112,13 +109,14 @@ namespace SampleService.Authorization.App.Services
                     };
                 }
 
+                // 실패횟수 초기화
+                user.FailCount = 0;
 
                 var jwtToken = GenerateJwtToken(user);
                 var refreshToken = GenerateRefreshToken(ipAddress);
 
                 user.RefreshTokens.Add(refreshToken);
                 dataContext.Update(user);
-
 
                 return new AuthenticateResponse
                 {
@@ -144,21 +142,25 @@ namespace SampleService.Authorization.App.Services
             return dataContext.Users.Select(u => new User
             {
                 Id = u.Id,
-                FirstName=u.FirstName,
-                LastName=u.LastName,
-                UserName=u.UserName,
+                FirstName = u.FirstName,
+                LastName = u.LastName,
+                UserName = u.UserName,
                 Password = "<<This field is not provided for security>>"
             });
         }
 
         public User GetById(string id)
         {
-            return dataContext.Users.FirstOrDefault(x => x.Id == id);
+            return dataContext.Users
+                .Include(x => x.RefreshTokens)
+                .FirstOrDefault(x => x.Id == id);
         }
 
         public User GetByUsername(string username)
         {
-            return dataContext.Users.FirstOrDefault(x => x.UserName == username);
+            return dataContext.Users
+                .Include(x => x.RefreshTokens)
+                .FirstOrDefault(x => x.UserName == username);
         }
 
         /// <summary>
@@ -169,15 +171,22 @@ namespace SampleService.Authorization.App.Services
         /// <returns></returns>
         public AuthenticateResponse RefreshToken(string token, string ipAddress)
         {
-            var user = dataContext.Users.SingleOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
+            var user = dataContext.Users
+                .Include(x => x.RefreshTokens)
+                //.FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token && t.IsActive));
+                .FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
 
-            if(user == null)
+            if (user == null)
             {
-                return null;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
             }
 
             var refreshToken = user.RefreshTokens.FirstOrDefault(x => x.Token == token);
-            if(refreshToken == null)
+            if (refreshToken == null)
             {
                 return new AuthenticateResponse
                 {
@@ -197,7 +206,7 @@ namespace SampleService.Authorization.App.Services
 
             var jwtToken = GenerateJwtToken(user);
             var newRefreshToken = GenerateRefreshToken(ipAddress);
-            
+
             refreshToken.Revoked = DateTimeOffset.UtcNow;
             refreshToken.RevokedByIp = ipAddress;
             refreshToken.ReplacedByToken = ipAddress;
@@ -232,25 +241,39 @@ namespace SampleService.Authorization.App.Services
         /// <param name="token">refresh token to Revoke</param>
         /// <param name="ipAddress">ip address</param>
         /// <returns></returns>
-        public bool RevokeToken(string token, string ipAddress)
+        public AuthenticateResponse RevokeToken(string token, string ipAddress)
         {
-            var user = dataContext.Users.SingleOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
+            var user = dataContext.Users
+                .Include(x => x.RefreshTokens)
+                .FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token ));
 
-            if(user == null)
+            if (user == null)
             {
-                return false;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
             }
 
-            var refreshToken = user.RefreshTokens.FirstOrDefault(x => x.Token == token );
+            var refreshToken = user.RefreshTokens.FirstOrDefault(x => x.Token == token);
 
             if (refreshToken == null)
             {
-                return false;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
             }
 
             if (!refreshToken.IsActive)
             {
-                return false;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Could not find a user",
+                };
             }
 
             refreshToken.Revoked = DateTimeOffset.UtcNow;
@@ -265,10 +288,18 @@ namespace SampleService.Authorization.App.Services
             catch (Exception ex)
             {
                 logger.LogError(ex, "Could not save revoked refresh data");
-                return false;
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.InternalServerError,
+                    Message = "Could not save revoked refresh data",
+                };
             }
 
-            return true;
+            return new AuthenticateResponse
+            {
+                Status = HttpStatusCode.Accepted,
+                Message = "Token revoked",
+            };
         }
 
         public async Task<AppResponse> CreateAsync(CreateUserRequest model, CancellationToken cancellationToken = default(CancellationToken))
@@ -375,7 +406,7 @@ namespace SampleService.Authorization.App.Services
         /// <returns></returns>
         private RefreshToken GenerateRefreshToken(string ipAddress)
         {
-            using (var rngCryptoServiceProvider=new RNGCryptoServiceProvider())
+            using (var rngCryptoServiceProvider = new RNGCryptoServiceProvider())
             {
                 var randomBytes = new byte[64];
                 rngCryptoServiceProvider.GetBytes(randomBytes);

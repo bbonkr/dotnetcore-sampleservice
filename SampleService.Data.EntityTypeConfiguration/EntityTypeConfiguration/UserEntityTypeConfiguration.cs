@@ -47,16 +47,19 @@ namespace SampleService.Data.EntityTypeConfiguration
                 ;
             builder
                 .Property(x => x.IsEnabled)
+                .IsRequired()
                 .HasDefaultValue(true)
                 .HasComment("사용여부")
                 ;
             builder
                 .Property(x => x.FailCount)
+                .IsRequired()
                 .HasDefaultValue(0)
                 .HasComment("인증 실패수")
                 ;
             builder
                 .Property(x => x.IsLocked)
+                .IsRequired()
                 .HasDefaultValue(false)
                 .HasComment("계정 잠금 여부")
                 ;

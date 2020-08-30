@@ -33,18 +33,12 @@ namespace SampleService.Authorization.App.Controllers
 
             if (!response.IsSuccessful)
             {
-                //return BadRequest(new MessageResponse
-                //{
-                //    Message = "Check your Username and Password",
-                //});
-
-
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Check your Username and Password");
             }
 
             SetTokenCookie(response.Data.RefreshToken);
 
-            return Ok(response.Data);
+            return StatusCodeResult(response);
         }
 
         [AllowAnonymous]
@@ -53,13 +47,8 @@ namespace SampleService.Authorization.App.Controllers
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
-            if(String.IsNullOrWhiteSpace(token))
+            if (String.IsNullOrWhiteSpace(token))
             {
-                //return BadRequest(new MessageResponse
-                //{
-                //    Message = "Token is Required",
-                //});
-
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is required.");
             }
 
@@ -73,7 +62,7 @@ namespace SampleService.Authorization.App.Controllers
 
             SetTokenCookie(response.Data.RefreshToken);
 
-            return Ok(response);
+            return StatusCodeResult(response);
         }
 
         [HttpPost("revoke-token")]
@@ -81,24 +70,15 @@ namespace SampleService.Authorization.App.Controllers
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
-
             if (String.IsNullOrWhiteSpace(token))
             {
 
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is Required");
             }
 
-            var result = userService.RevokeToken(token, GetIpAddress());
+            var response = userService.RevokeToken(token, GetIpAddress());
 
-            if (!result)
-            {
-                return StatusCodeResult(HttpStatusCode.NotFound, "Token not found");
-            }
-
-            return Ok(new MessageResponse
-            {
-                Message = "Token is revoked",
-            });
+            return StatusCodeResult(response);
         }
 
         [HttpGet]
@@ -106,22 +86,23 @@ namespace SampleService.Authorization.App.Controllers
         {
             var users = userService.GetAll();
 
-            return Ok(users);
+            return StatusCodeResult(HttpStatusCode.OK, users);
         }
 
         [HttpGet("{id}")]
         public IActionResult GetById(string id)
         {
+            var status = HttpStatusCode.OK;
+            var message = "";
+
             var user = userService.GetById(id);
             if (user == null)
             {
-                return NotFound(new MessageResponse
-                {
-                    Message = "Could not find a user"
-                });
+                status = HttpStatusCode.NotFound;
+                message = "Could not find a user";
             }
 
-            return Ok(user);
+            return StatusCodeResult(status, user, message);
         }
 
         [HttpGet("{id}/refresh-tokens")]
@@ -130,13 +111,10 @@ namespace SampleService.Authorization.App.Controllers
             var user = userService.GetById(id);
             if(user == null)
             {
-                return NotFound(new MessageResponse
-                {
-                    Message = "Could not find a user"
-                });
+                return StatusCodeResult(HttpStatusCode.NotFound, "Could not find a user");
             }
 
-            return Ok(user.RefreshTokens);
+            return StatusCodeResult(HttpStatusCode.OK, user.RefreshTokens);
         }
 
         [AllowAnonymous]
