@@ -87,7 +87,16 @@ namespace SampleService.Authorization.App.Services
                     return new AuthenticateResponse
                     {
                         Status = HttpStatusCode.NotFound,
-                        Message = "Could not find a user",
+                        Message = "Check your Username and Password",
+                    };
+                }
+
+                if(user.FailCount > 5)
+                {
+                    return new AuthenticateResponse
+                    {
+                        Status = HttpStatusCode.NotFound,
+                        Message = "User account had been locked. Please change user password.",
                     };
                 }
 
@@ -105,7 +114,7 @@ namespace SampleService.Authorization.App.Services
                     return new AuthenticateResponse
                     {
                         Status = HttpStatusCode.NotFound,
-                        Message = "Could not find a user",
+                        Message = "Check your Username and Password",
                     };
                 }
 

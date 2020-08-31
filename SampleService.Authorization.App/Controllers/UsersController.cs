@@ -33,7 +33,7 @@ namespace SampleService.Authorization.App.Controllers
 
             if (!response.IsSuccessful)
             {
-                return StatusCodeResult(HttpStatusCode.BadRequest, "Check your Username and Password");
+                return StatusCodeResult(response);
             }
 
             SetTokenCookie(response.Data.RefreshToken);
@@ -139,18 +139,18 @@ namespace SampleService.Authorization.App.Controllers
                 Expires = DateTimeOffset.UtcNow.AddDays(7),
             };
 
-            Response.Cookies.Append("refreshToken", token, cookieOptions);
+            Response?.Cookies.Append("refreshToken", token, cookieOptions);
         }
 
         private string GetIpAddress()
         {
-            if (Request.Headers.ContainsKey("X-Forwarded-For"))
+            if (Request?.Headers?.ContainsKey("X-Forwarded-For") ?? false)
             {
                 return Request.Headers["X-Forwarded-For"];
             }
             else
             {
-                return HttpContext.Connection.RemoteIpAddress.MapToIPv4().ToString();
+                return HttpContext?.Connection?.RemoteIpAddress?.MapToIPv4()?.ToString() ?? "Unknown";
             }
         }
     }
