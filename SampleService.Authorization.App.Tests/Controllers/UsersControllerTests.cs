@@ -26,7 +26,7 @@ namespace SampleService.Authorization.App.Tests.Controllers
         public void Authenticate_should_be_success()
         {
             var userServiceMock = new Mock<IUserService>();
-            userServiceMock.Setup(service => service.Authenticate(It.IsAny<AuthenticateRequest>(), It.IsAny<string>()))
+            userServiceMock.Setup(service => service.Authenticate(It.IsAny<AuthenticateRequest>()))
                 .Returns(GetAuthenticateResponse_Ok());
 
             var controller = new UsersController(userServiceMock.Object);
@@ -44,8 +44,8 @@ namespace SampleService.Authorization.App.Tests.Controllers
         public void Authenticate_should_be_fail_unauthorize()
         {
             var userServiceMock = new Mock<IUserService>();
-            userServiceMock.Setup(service => service.Authenticate(It.IsAny<AuthenticateRequest>(), It.IsAny<string>()))
-                .Returns(GetAuthenticateResponse_Unauthorized());
+            userServiceMock.Setup(service => service.Authenticate(It.IsAny<AuthenticateRequest>()))
+                .Returns(GetAuthenticateResponse_Fail());
 
             var controller = new UsersController(userServiceMock.Object);
 
@@ -55,7 +55,7 @@ namespace SampleService.Authorization.App.Tests.Controllers
             var resultValue = Assert.IsType<AuthenticateResponse>(result.Value);
 
             Assert.NotNull(result.Value);
-            Assert.True(resultValue.Status == System.Net.HttpStatusCode.Unauthorized);
+            Assert.False(resultValue.Status == System.Net.HttpStatusCode.OK);
         }
 
         private AuthenticateResponse GetAuthenticateResponse_Ok()
@@ -75,13 +75,85 @@ namespace SampleService.Authorization.App.Tests.Controllers
             };
         }
     
-        private AuthenticateResponse GetAuthenticateResponse_Unauthorized()
+        private AuthenticateResponse GetAuthenticateResponse_Fail()
         {
             return new AuthenticateResponse
             {
                 Status = System.Net.HttpStatusCode.Unauthorized,
                 Message = "Unauthorized",
             };
+        }
+    
+        [Fact]
+        public void RefreshToken_should_be_success()
+        {
+            var validAccessToken = "It is a valid token";
+            
+            var userServiceMock = new Mock<IUserService>();
+            userServiceMock.Setup(service => service.RefreshToken(validAccessToken))
+                .Returns(GetAuthenticateResponse_Ok());
+
+            var controller = new UsersController(userServiceMock.Object);
+
+            var actionResult = controller.RefreshToken(new RefreshTokenRequest
+            {
+                Token = validAccessToken,
+            });
+
+            var result = Assert.IsType<ObjectResult>(actionResult);
+            var resultValue = Assert.IsType<AuthenticateResponse>(result.Value);
+
+            Assert.NotNull(result.Value);
+            Assert.True(resultValue.Status == System.Net.HttpStatusCode.OK);
+        }
+
+        [Fact]
+        public void RefreshToken_should_be_fail()
+        {
+            var notValidAccessToken = "It is not a valid token";
+
+            var userServiceMock = new Mock<IUserService>();
+            userServiceMock.Setup(service => service.RefreshToken(notValidAccessToken))
+                .Returns(GetAuthenticateResponse_Fail());
+
+            var controller = new UsersController(userServiceMock.Object);
+
+            var actionResult = controller.RefreshToken(new RefreshTokenRequest
+            {
+                Token = notValidAccessToken,
+            });
+
+            var result = Assert.IsType<ObjectResult>(actionResult);
+            var resultValue = Assert.IsType<AppResponse>(result.Value);
+
+            Assert.NotNull(result.Value);
+            Assert.False(resultValue.Status == System.Net.HttpStatusCode.OK);
+        }
+
+        [Fact]
+        public void RefreshToken_should_be_need_token()
+        {
+            var emptyAccessToken = "";
+
+            var userServiceMock = new Mock<IUserService>();
+            userServiceMock.Setup(service => service.RefreshToken(emptyAccessToken))
+                .Returns(GetAuthenticateResponse_Fail());
+                
+
+
+            var controller = new UsersController(userServiceMock.Object);
+
+            var actionResult = controller.RefreshToken(new RefreshTokenRequest
+            {
+                Token = emptyAccessToken,
+            });
+
+            var result = Assert.IsType<ObjectResult>(actionResult);
+            var resultValue = Assert.IsType<AppResponse>(result.Value);
+
+            Assert.NotNull(result.Value);
+            Assert.False(resultValue.Status == System.Net.HttpStatusCode.OK);
+            Assert.True(resultValue.Status == System.Net.HttpStatusCode.BadRequest);
         }
     }
 }
