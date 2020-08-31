@@ -29,7 +29,7 @@ namespace SampleService.Authorization.App.Controllers
         [HttpPost("authenticate")]
         public IActionResult Authenticate([FromBody] AuthenticateRequest model)
         {
-            var response = userService.Authenticate(model, GetIpAddress());
+            var response = userService.Authenticate(model);
 
             if (!response.IsSuccessful)
             {
@@ -52,7 +52,7 @@ namespace SampleService.Authorization.App.Controllers
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is required.");
             }
 
-            var response = userService.RefreshToken(token, GetIpAddress());
+            var response = userService.RefreshToken(token);
 
             if (!response.IsSuccessful)
             {
@@ -72,11 +72,10 @@ namespace SampleService.Authorization.App.Controllers
 
             if (String.IsNullOrWhiteSpace(token))
             {
-
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is Required");
             }
 
-            var response = userService.RevokeToken(token, GetIpAddress());
+            var response = userService.RevokeToken(token);
 
             return StatusCodeResult(response);
         }
