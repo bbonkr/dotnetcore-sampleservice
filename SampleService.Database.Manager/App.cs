@@ -16,14 +16,19 @@ namespace SampleService.Database.Manager
 {
     public class App:IHostedService
     {
-        public App(DataContext dataContext, IOptions<AppSettings> appSettings, ILoggerFactory loggerFactory)
+        public App(
+            DataContext dataContext,
+            IHostApplicationLifetime hostApplicationLifetime,
+            IOptions<AppSettings> appSettings, 
+            ILoggerFactory loggerFactory)
         {
             this.dataContext = dataContext;
+            this.hostApplicationLifetime = hostApplicationLifetime;
             this.appSettings = appSettings.Value;
-            logger = loggerFactory.CreateLogger<App>();
+            logger = loggerFactory.CreateLogger<App>();            
         }
 
- 
+
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             logger.LogInformation($"App run {appSettings.ConnectionStrings.DefaultConnection}");
@@ -32,7 +37,10 @@ namespace SampleService.Database.Manager
             await dataContext.Database.MigrateAsync(cancellationToken);
             logger.LogInformation($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [COMPLETE]\t\tDatabase migration");
 
-            Console.ReadLine();
+            Console.WriteLine("데이터베이스 마이그레이션 완료");
+
+            // 종료
+            hostApplicationLifetime.StopApplication();
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
@@ -41,7 +49,8 @@ namespace SampleService.Database.Manager
         }
 
         private readonly DataContext dataContext;
+        private readonly IHostApplicationLifetime hostApplicationLifetime;
         private readonly AppSettings appSettings;
-        private readonly ILogger logger;
+        private readonly ILogger logger;        
     }
 }
