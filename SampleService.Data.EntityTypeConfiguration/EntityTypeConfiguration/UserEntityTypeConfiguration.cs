@@ -13,7 +13,9 @@ namespace SampleService.Data.EntityTypeConfiguration
     {
         public void Configure(EntityTypeBuilder<User> builder)
         {
-            builder.HasKey(x => x.Id);
+            builder.HasComment("사용자");
+
+            builder.HasKey(x => x.Id);            
 
             builder
                 .Property(x => x.Id)

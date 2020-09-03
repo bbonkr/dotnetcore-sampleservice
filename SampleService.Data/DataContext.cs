@@ -13,6 +13,8 @@ namespace SampleService.Data
 
         public DbSet<User> Users { get; set; }
 
+        public DbSet<AuthorizationLog> AuthorizationLogs { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             builder.ApplyConfigurationsFromAssembly(Assembly.Load("SampleService.Data.EntityTypeConfiguration"));

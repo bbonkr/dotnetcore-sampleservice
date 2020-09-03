@@ -9,6 +9,7 @@ using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using System.Threading.Tasks;
+using System.Reflection;
 
 namespace SampleService.Database.Manager
 {
@@ -53,11 +54,14 @@ namespace SampleService.Database.Manager
                     services.Configure<AppSettings>(context.Configuration);
 
                     var defaultConnection = context.Configuration.GetConnectionString("DefaultConnection");
+                    var migrationAssemblyName = typeof(SampleService.Data.SqlServer.PlaceholderType).Assembly.FullName;
 
                     services.AddDbContext<DataContext>(x =>
                     {
-                        x.UseSqlServer(defaultConnection, options => {
-                            options.MigrationsAssembly("SampleService.Data.SqlServer");
+                        x.UseSqlServer(defaultConnection, options =>
+                        {
+                            //options.MigrationsAssembly("SampleService.Data.SqlServer");
+                            options.MigrationsAssembly(migrationAssemblyName);
                         });
                     });
 
@@ -68,7 +72,10 @@ namespace SampleService.Database.Manager
                     //Configure Logging
                     logging.AddConsole();
                 })
-                .UseConsoleLifetime(options => {});
+                .UseConsoleLifetime(options =>
+                {
+
+                });
 
     }
 }
