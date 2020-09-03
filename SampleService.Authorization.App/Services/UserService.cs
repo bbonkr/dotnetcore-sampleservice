@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,9 +23,9 @@ namespace SampleService.Authorization.App.Services
 {
     public interface IUserService
     {
-        AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress);
-        AuthenticateResponse RefreshToken(string token, string ipAddress);
-        AuthenticateResponse RevokeToken(string token, string ipAddress);
+        AuthenticateResponse Authenticate(AuthenticateRequest model );
+        AuthenticateResponse RefreshToken(string token);
+        AuthenticateResponse RevokeToken(string token);
         IEnumerable<User> GetAll();
         User GetById(string id);
 
@@ -41,15 +42,18 @@ namespace SampleService.Authorization.App.Services
         private readonly AppSettings appSettings;
         private readonly IHasher hasher;
         private readonly ILogger logger;
+        private readonly IHttpContextAccessor httpContextAccessor;
 
         public UserService(
             DataContext dataContext,
             IHasher hasher,
+            IHttpContextAccessor httpContextAccessor,
             IOptions<AppSettings> appSettings,
             ILoggerFactory loggerFactory)
         {
             this.dataContext = dataContext;
             this.hasher = hasher;
+            this.httpContextAccessor = httpContextAccessor;
             this.appSettings = appSettings.Value;
             this.logger = loggerFactory.CreateLogger<UserService>();
         }
@@ -60,10 +64,12 @@ namespace SampleService.Authorization.App.Services
         /// <param name="model"></param>
         /// <param name="ipAddress"></param>
         /// <returns></returns>
-        public AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress)
+        public AuthenticateResponse Authenticate(AuthenticateRequest model )
         {
             try
             {
+
+                string ipAddress = GetIpAddress();
 
                 if (String.IsNullOrWhiteSpace(model.Username))
                 {
@@ -87,7 +93,16 @@ namespace SampleService.Authorization.App.Services
                     return new AuthenticateResponse
                     {
                         Status = HttpStatusCode.NotFound,
-                        Message = "Could not find a user",
+                        Message = "Check your Username and Password",
+                    };
+                }
+
+                if(user.FailCount > 5)
+                {
+                    return new AuthenticateResponse
+                    {
+                        Status = HttpStatusCode.NotFound,
+                        Message = "User account had been locked. Please change user password.",
                     };
                 }
 
@@ -105,7 +120,7 @@ namespace SampleService.Authorization.App.Services
                     return new AuthenticateResponse
                     {
                         Status = HttpStatusCode.NotFound,
-                        Message = "Could not find a user",
+                        Message = "Check your Username and Password",
                     };
                 }
 
@@ -169,8 +184,9 @@ namespace SampleService.Authorization.App.Services
         /// <param name="token">refresh token</param>
         /// <param name="ipAddress"></param>
         /// <returns></returns>
-        public AuthenticateResponse RefreshToken(string token, string ipAddress)
+        public AuthenticateResponse RefreshToken(string token)
         {
+            var ipAddress = GetIpAddress();
             var user = dataContext.Users
                 .Include(x => x.RefreshTokens)
                 //.FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token && t.IsActive));
@@ -209,7 +225,7 @@ namespace SampleService.Authorization.App.Services
 
             refreshToken.Revoked = DateTimeOffset.UtcNow;
             refreshToken.RevokedByIp = ipAddress;
-            refreshToken.ReplacedByToken = ipAddress;
+            refreshToken.ReplacedByToken = token;
 
             user.RefreshTokens.Add(newRefreshToken);
             dataContext.Update(user);
@@ -241,8 +257,10 @@ namespace SampleService.Authorization.App.Services
         /// <param name="token">refresh token to Revoke</param>
         /// <param name="ipAddress">ip address</param>
         /// <returns></returns>
-        public AuthenticateResponse RevokeToken(string token, string ipAddress)
+        public AuthenticateResponse RevokeToken(string token)
         {
+            string ipAddress = GetIpAddress();
+
             var user = dataContext.Users
                 .Include(x => x.RefreshTokens)
                 .FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token ));
@@ -432,6 +450,25 @@ namespace SampleService.Authorization.App.Services
                 JwtToken = jwtToken,
                 RefreshToken = refreshToken,
             };
+        }
+
+        private string GetIpAddress()
+        {
+            if (this.httpContextAccessor.HttpContext != null)
+            {
+                var request = this.httpContextAccessor.HttpContext.Request;
+
+                if (request?.Headers?.ContainsKey("X-Forwarded-For") ?? false)
+                {
+                    return request.Headers["X-Forwarded-For"];
+                }
+                else
+                {
+                    return this.httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.MapToIPv4()?.ToString() ?? "Unknown";
+                }
+            }
+
+            return "unknown";
         }
     }
 }

@@ -29,11 +29,11 @@ namespace SampleService.Authorization.App.Controllers
         [HttpPost("authenticate")]
         public IActionResult Authenticate([FromBody] AuthenticateRequest model)
         {
-            var response = userService.Authenticate(model, GetIpAddress());
+            var response = userService.Authenticate(model);
 
             if (!response.IsSuccessful)
             {
-                return StatusCodeResult(HttpStatusCode.BadRequest, "Check your Username and Password");
+                return StatusCodeResult(response);
             }
 
             SetTokenCookie(response.Data.RefreshToken);
@@ -52,7 +52,7 @@ namespace SampleService.Authorization.App.Controllers
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is required.");
             }
 
-            var response = userService.RefreshToken(token, GetIpAddress());
+            var response = userService.RefreshToken(token);
 
             if (!response.IsSuccessful)
             {
@@ -72,11 +72,10 @@ namespace SampleService.Authorization.App.Controllers
 
             if (String.IsNullOrWhiteSpace(token))
             {
-
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is Required");
             }
 
-            var response = userService.RevokeToken(token, GetIpAddress());
+            var response = userService.RevokeToken(token);
 
             return StatusCodeResult(response);
         }
@@ -139,18 +138,18 @@ namespace SampleService.Authorization.App.Controllers
                 Expires = DateTimeOffset.UtcNow.AddDays(7),
             };
 
-            Response.Cookies.Append("refreshToken", token, cookieOptions);
+            Response?.Cookies.Append("refreshToken", token, cookieOptions);
         }
 
         private string GetIpAddress()
         {
-            if (Request.Headers.ContainsKey("X-Forwarded-For"))
+            if (Request?.Headers?.ContainsKey("X-Forwarded-For") ?? false)
             {
                 return Request.Headers["X-Forwarded-For"];
             }
             else
             {
-                return HttpContext.Connection.RemoteIpAddress.MapToIPv4().ToString();
+                return HttpContext?.Connection?.RemoteIpAddress?.MapToIPv4()?.ToString() ?? "Unknown";
             }
         }
     }

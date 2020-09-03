@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +20,8 @@ using Microsoft.IdentityModel.Tokens;
 
 using SampleService.Authorization.App.Services;
 using SampleService.Authorization.Data;
+
+using SampleService.Graphql;
 
 namespace SampleService.Authorization.App
 {
@@ -33,6 +37,9 @@ namespace SampleService.Authorization.App
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddHttpContextAccessor();
+            services.AddLogging();
+
             //services.AddDbContext<DataContext>(x => x.UseInMemoryDatabase("SampleDatabase"));
             var defaultConnection = Configuration.GetConnectionString("DefaultConnection");
             services.AddDbContext<DataContext>(x =>
@@ -40,7 +47,9 @@ namespace SampleService.Authorization.App
                 x.UseSqlServer(defaultConnection, options => {
                     options.MigrationsAssembly("SampleService.Data.SqlServer");
                 });
-            });
+            }, ServiceLifetime.Singleton);
+
+            services.AddSingleton<DataContext>();
 
             services.AddCors();
 
@@ -83,6 +92,12 @@ namespace SampleService.Authorization.App
 
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IHasher, Hasher>();
+
+            services.AddGraphql();
+
+            services.Configure<KestrelServerOptions>(options => {
+                options.AllowSynchronousIO = true;
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -113,6 +128,8 @@ namespace SampleService.Authorization.App
             {
                 endpoints.MapControllers();
             });
+
+            app.UseGraphql();
         }
     }
 }
