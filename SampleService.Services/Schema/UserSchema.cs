@@ -10,7 +10,10 @@ namespace SampleService.Services.Schema
 {
     public class UserSchema : GraphQL.Types.Schema
     {
-        public UserSchema(UserQuery query, IDependencyResolver resolver)
+        public UserSchema(
+            UserQuery query,
+            IDependencyResolver resolver
+            )
         {
             this.Query = query;
             this.DependencyResolver = resolver;

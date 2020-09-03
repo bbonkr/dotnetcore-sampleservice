@@ -41,7 +41,7 @@ namespace SampleService.Services.GraphqlQueries
                     }),
                 resolve: async x => await userService.FindByUsernameAsync(x.GetArgument<string>("username"))
                 );
-        }
+        }        
 
 
         private readonly IUserDataService userService;

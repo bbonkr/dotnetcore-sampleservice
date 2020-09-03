@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SampleService.Data\SampleService.Data.csproj" />
+    <ProjectReference Include="..\SampleService.Authorization.Data\SampleService.Authorization.Data.csproj" />
     <ProjectReference Include="..\SampleService.Entities\SampleService.Entities.csproj" />
   </ItemGroup>
 

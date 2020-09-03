@@ -16,6 +16,7 @@
     <ProjectReference Include="..\SampleService.Entities\SampleService.Entities.csproj" />
     <ProjectReference Include="..\SampleService.Authorization.Data\SampleService.Authorization.Data.csproj" />
     <ProjectReference Include="..\SampleService.Entities\SampleService.Entities.csproj" />
+    <ProjectReference Include="..\SampleService.Graphql\SampleService.Graphql.csproj" />
     <ProjectReference Include="..\SampleService.Models\SampleService.Models.csproj" />
   </ItemGroup>
 
