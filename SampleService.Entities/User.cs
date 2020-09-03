@@ -2,8 +2,16 @@ using System.Collections.Generic;
 
 namespace SampleService.Entities
 {
+    /// <summary>
+    /// 사용자
+    /// </summary>
     public class User
     {
+        public User()
+        {
+            IsEnabled = true;
+        }
+
         /// <summary>
         /// 식별자
         /// </summary>

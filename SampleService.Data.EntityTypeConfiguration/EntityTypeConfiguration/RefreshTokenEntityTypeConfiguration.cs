@@ -14,6 +14,8 @@ namespace SampleService.Data.EntityTypeConfiguration
     {
         public void Configure(EntityTypeBuilder<RefreshToken> builder)
         {
+            builder.HasComment("리프레시 토큰");
+
             builder.HasKey(x => x.Id);
 
             builder
@@ -43,6 +45,7 @@ namespace SampleService.Data.EntityTypeConfiguration
             builder
                 .Property(x => x.Created)
                 .IsRequired()
+                .HasDefaultValue(DateTimeOffset.UtcNow)
                 .HasComment("작성시각")
                 ;
             builder
