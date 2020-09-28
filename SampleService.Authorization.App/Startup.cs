@@ -22,6 +22,7 @@ using SampleService.Authorization.App.Services;
 using SampleService.Authorization.Data;
 
 using SampleService.Graphql;
+using SampleService.Repositories;
 
 namespace SampleService.Authorization.App
 {
@@ -50,6 +51,7 @@ namespace SampleService.Authorization.App
             }, ServiceLifetime.Singleton);
 
             services.AddSingleton<DataContext>();
+          
 
             services.AddCors();
 
@@ -92,7 +94,7 @@ namespace SampleService.Authorization.App
 
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IHasher, Hasher>();
-
+            services.AddScoped<IUserRepository, UserRepository>();
             services.AddGraphql();
 
             services.Configure<KestrelServerOptions>(options => {

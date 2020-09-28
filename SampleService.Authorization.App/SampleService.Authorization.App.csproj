@@ -18,6 +18,7 @@
     <ProjectReference Include="..\SampleService.Entities\SampleService.Entities.csproj" />
     <ProjectReference Include="..\SampleService.Graphql\SampleService.Graphql.csproj" />
     <ProjectReference Include="..\SampleService.Models\SampleService.Models.csproj" />
+    <ProjectReference Include="..\SampleService.Repositories\SampleService.Repositories.csproj" />
   </ItemGroup>
 
 

@@ -18,6 +18,8 @@ namespace SampleService.Services
 
         Task<User> FindByUsernameAsync(string username);
 
+    
+
         Task<IList<User>> GetAllAsync(Func<User, bool> predicate, bool includeTokens);
     }
 
@@ -58,6 +60,8 @@ namespace SampleService.Services
 
             return Task.FromResult<IList<User>>(result.ToList());
         }
+
+        
 
         
 
