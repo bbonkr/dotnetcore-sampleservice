@@ -13,6 +13,7 @@ using SampleService.Services;
 using SampleService.Services.Schema;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SampleService.Services.GraphqlQueries;
+using SampleService.Repositories;
 
 namespace SampleService.Graphql
 {
@@ -29,17 +30,19 @@ namespace SampleService.Graphql
                 return x.GetRequiredService(type);
             }));
 
-            services.AddSingleton<IUserDataService, UserDataService>();
-            
+
+            services.TryAddTransient<IUserRepository, UserRepository>();
+
             services.AddSingleton<UserQuery>();
             services.AddSingleton<UserType>();
-            services.AddSingleton<UserSchema>();            
+            services.AddSingleton<UserSchema>();
 
-            
+            var assembly = Assembly.GetAssembly(typeof(SampleService.Services.Schema.UserSchema));
 
-            services.AddGraphQL()
+            services
+                .AddGraphQL()
                 .AddWebSockets()
-                .AddGraphTypes(Assembly.GetAssembly(typeof(SampleService.Services.Schema.UserSchema)), ServiceLifetime.Singleton);
+                .AddGraphTypes(assembly, ServiceLifetime.Singleton);
 
             return services;
         }

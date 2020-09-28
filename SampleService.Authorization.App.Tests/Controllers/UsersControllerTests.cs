@@ -26,7 +26,7 @@ namespace SampleService.Authorization.App.Tests.Controllers
         public void Authenticate_should_be_success()
         {
             var userServiceMock = new Mock<IUserService>();
-            userServiceMock.Setup(service => service.Authenticate(It.IsAny<AuthenticateRequest>()))
+            userServiceMock.Setup(service => service.AuthenticateAsync(It.IsAny<AuthenticateRequest>()))
                 .Returns(GetAuthenticateResponse_Ok());
 
             var controller = new UsersController(userServiceMock.Object);
@@ -44,7 +44,7 @@ namespace SampleService.Authorization.App.Tests.Controllers
         public void Authenticate_should_be_fail_unauthorize()
         {
             var userServiceMock = new Mock<IUserService>();
-            userServiceMock.Setup(service => service.Authenticate(It.IsAny<AuthenticateRequest>()))
+            userServiceMock.Setup(service => service.AuthenticateAsync(It.IsAny<AuthenticateRequest>()))
                 .Returns(GetAuthenticateResponse_Fail());
 
             var controller = new UsersController(userServiceMock.Object);
@@ -90,7 +90,7 @@ namespace SampleService.Authorization.App.Tests.Controllers
             var validAccessToken = "It is a valid token";
             
             var userServiceMock = new Mock<IUserService>();
-            userServiceMock.Setup(service => service.RefreshToken(validAccessToken))
+            userServiceMock.Setup(service => service.RefreshTokenAsync(validAccessToken))
                 .Returns(GetAuthenticateResponse_Ok());
 
             var controller = new UsersController(userServiceMock.Object);
@@ -113,7 +113,7 @@ namespace SampleService.Authorization.App.Tests.Controllers
             var notValidAccessToken = "It is not a valid token";
 
             var userServiceMock = new Mock<IUserService>();
-            userServiceMock.Setup(service => service.RefreshToken(notValidAccessToken))
+            userServiceMock.Setup(service => service.RefreshTokenAsync(notValidAccessToken))
                 .Returns(GetAuthenticateResponse_Fail());
 
             var controller = new UsersController(userServiceMock.Object);
@@ -136,7 +136,7 @@ namespace SampleService.Authorization.App.Tests.Controllers
             var emptyAccessToken = "";
 
             var userServiceMock = new Mock<IUserService>();
-            userServiceMock.Setup(service => service.RefreshToken(emptyAccessToken))
+            userServiceMock.Setup(service => service.RefreshTokenAsync(emptyAccessToken))
                 .Returns(GetAuthenticateResponse_Fail());
                 
 

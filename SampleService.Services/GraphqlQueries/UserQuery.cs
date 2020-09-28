@@ -4,19 +4,37 @@ using System.Text;
 
 using GraphQL.Types;
 
+using SampleService.Repositories;
 using SampleService.Services.Schema;
 
 namespace SampleService.Services.GraphqlQueries
 {
-    public class UserQuery:ObjectGraphType<object>
+    public class UserQuery : ObjectGraphType<object>
     {
-        public UserQuery(IUserDataService userService)
+        public UserQuery(IUserRepository userRepository)
         {
-            this.userService = userService;
+            this.userRepository = userRepository;
 
             FieldAsync<ListGraphType<UserType>>("users",
                 description: "Get list of user",
-                resolve: async c => await userService.GetAllAsync(_ => true, false));
+                arguments: new QueryArguments(
+                    new QueryArgument<NonNullGraphType<IntGraphType>>()
+                    {
+                        Name = "page",
+                        Description = "current page",
+                        DefaultValue = 1,
+                    }, new QueryArgument<NonNullGraphType<IntGraphType>>()
+                    {
+                        Name = "count",
+                        Description = "Records per a page",
+                        DefaultValue = 10,
+                    }),
+                resolve: async x => await userRepository.GetUsersAsync(
+                    _ => true,
+                    x.GetArgument<int>("page"),
+                    x.GetArgument<int>("count"),
+                    false
+                    ));
 
             FieldAsync<UserType>(
                 "findUserById",
@@ -27,7 +45,7 @@ namespace SampleService.Services.GraphqlQueries
                         Name = "id",
                         Description = "User id"
                     }),
-                resolve: async x => await userService.FindByIdAsync(x.GetArgument<string>("id"))
+                resolve: async x => await userRepository.FindByIdAsync(x.GetArgument<string>("id"))
                 );
 
             FieldAsync<UserType>(
@@ -39,11 +57,11 @@ namespace SampleService.Services.GraphqlQueries
                         Name = "username",
                         Description = "User account name"
                     }),
-                resolve: async x => await userService.FindByUsernameAsync(x.GetArgument<string>("username"))
+                resolve: async x => await userRepository.FindByUsernameAsync(x.GetArgument<string>("username"))
                 );
-        }        
+        }
 
 
-        private readonly IUserDataService userService;
+        private readonly IUserRepository userRepository;
     }
 }

@@ -7,11 +7,13 @@ using Microsoft.IdentityModel.Tokens;
 using SampleService.Authorization.Data;
 using SampleService.Entities;
 using SampleService.Models;
+using SampleService.Repositories;
 
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -23,35 +25,39 @@ namespace SampleService.Authorization.App.Services
 {
     public interface IUserService
     {
-        AuthenticateResponse Authenticate(AuthenticateRequest model );
-        AuthenticateResponse RefreshToken(string token);
-        AuthenticateResponse RevokeToken(string token);
-        IEnumerable<User> GetAll();
-        User GetById(string id);
+        Task<AuthenticateResponse> AuthenticateAsync(AuthenticateRequest model);
+        Task<AuthenticateResponse> RefreshTokenAsync(string token);
+        Task<AuthenticateResponse> RevokeTokenAsync(string token);
+        Task<IEnumerable<User>> GetAllAsync(int page = 1, int count = 10);
 
-        Task<AppResponse> CreateAsync(CreateUserRequest model, CancellationToken cancellationToken = default(CancellationToken));
+        Task<User> GetByIdAsync(string id);
 
-        Task<AppResponse> UpdateAsync(UpdateUserRequest user, CancellationToken cancellationToken = default(CancellationToken));
+        Task<AppResponse> CreateAsync(CreateUserRequest model, CancellationToken cancellationToken = default);
 
-        Task<AppResponse> CloseAccountAsync(CloseAccountRequest user, CancellationToken cancellationToken = default(CancellationToken));
+        Task<AppResponse> UpdateAsync(UpdateUserRequest user, CancellationToken cancellationToken = default);
+
+        Task<AppResponse> CloseAccountAsync(CloseAccountRequest user, CancellationToken cancellationToken = default);
     }
 
     public class UserService : IUserService
     {
-        private readonly DataContext dataContext;
+        //private readonly DataContext dataContext;
+        private readonly IUserRepository userRepository;
         private readonly AppSettings appSettings;
         private readonly IHasher hasher;
         private readonly ILogger logger;
         private readonly IHttpContextAccessor httpContextAccessor;
 
         public UserService(
-            DataContext dataContext,
+            //DataContext dataContext,
+            IUserRepository userRepository,
             IHasher hasher,
             IHttpContextAccessor httpContextAccessor,
             IOptions<AppSettings> appSettings,
             ILoggerFactory loggerFactory)
         {
-            this.dataContext = dataContext;
+            //this.dataContext = dataContext;
+            this.userRepository = userRepository;
             this.hasher = hasher;
             this.httpContextAccessor = httpContextAccessor;
             this.appSettings = appSettings.Value;
@@ -64,97 +70,97 @@ namespace SampleService.Authorization.App.Services
         /// <param name="model"></param>
         /// <param name="ipAddress"></param>
         /// <returns></returns>
-        public AuthenticateResponse Authenticate(AuthenticateRequest model )
+        public async Task<AuthenticateResponse> AuthenticateAsync(AuthenticateRequest model)
         {
-            try
+
+            string ipAddress = GetIpAddress();
+
+            if (String.IsNullOrWhiteSpace(model.Username))
             {
+                logger.LogInformation($"{nameof(AuthenticateRequest.Username)} is empty.");
+                throw new ArgumentException("The username is required.", nameof(AuthenticateRequest.Username));
+            }
+            if (String.IsNullOrWhiteSpace(model.Password))
+            {
+                logger.LogInformation($"{nameof(AuthenticateRequest.Password)} is empty.");
+                throw new ArgumentException("The password is required.", nameof(AuthenticateRequest.Password));
+            }
 
-                string ipAddress = GetIpAddress();
+            var user = await userRepository.FindByUsernameAsync(model.Username, true);
 
-                if (String.IsNullOrWhiteSpace(model.Username))
+            if (user == null)
+            {
+                return new AuthenticateResponse
                 {
-                    logger.LogInformation($"{nameof(AuthenticateRequest.Username)} is empty.");
-                    throw new ArgumentException("The username is required.", nameof(AuthenticateRequest.Username));
-                }
-                if (String.IsNullOrWhiteSpace(model.Password))
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Check your Username and Password",
+                };
+            }
+
+            if (user.FailCount > 5)
+            {
+                return new AuthenticateResponse
                 {
-                    logger.LogInformation($"{nameof(AuthenticateRequest.Password)} is empty.");
-                    throw new ArgumentException("The password is required.", nameof(AuthenticateRequest.Password));
-                }
+                    Status = HttpStatusCode.NotFound,
+                    Message = "User account had been locked. Please change user password.",
+                };
+            }
 
-                var user = dataContext
-                    .Users
-                    .Include(x => x.RefreshTokens)
-                    .Where(x => x.UserName == model.Username)
-                    .FirstOrDefault();
-
-                if (user == null)
-                {
-                    return new AuthenticateResponse
-                    {
-                        Status = HttpStatusCode.NotFound,
-                        Message = "Check your Username and Password",
-                    };
-                }
-
-                if(user.FailCount > 5)
-                {
-                    return new AuthenticateResponse
-                    {
-                        Status = HttpStatusCode.NotFound,
-                        Message = "User account had been locked. Please change user password.",
-                    };
-                }
-
-                if (!hasher.VerifyHashedPassword(user.Password, model.Password))
-                {
-                    user.FailCount += 1;
-
-                    if (user.FailCount > 5)
-                    {
-                        user.IsLocked = true;
-                    }
-
-                    dataContext.Update(user);
-
-                    return new AuthenticateResponse
-                    {
-                        Status = HttpStatusCode.NotFound,
-                        Message = "Check your Username and Password",
-                    };
-                }
-
-                // 실패횟수 초기화
-                user.FailCount = 0;
-
-                var jwtToken = GenerateJwtToken(user);
-                var refreshToken = GenerateRefreshToken(ipAddress);
-
-                user.RefreshTokens.Add(refreshToken);
-                dataContext.Update(user);
+            if (!hasher.VerifyHashedPassword(user.Password, model.Password))
+            {
+                await userRepository.UpdateFailCountAsync(user, user.FailCount + 1);
 
                 return new AuthenticateResponse
                 {
-                    Status = HttpStatusCode.OK,
-                    Data = CreateAuthenticateResponse(user, jwtToken, refreshToken.Token),
+                    Status = HttpStatusCode.NotFound,
+                    Message = "Check your Username and Password",
                 };
             }
-            finally
+
+
+            await userRepository.BeginTranAsync();
+            // 실패횟수 초기화
+            await userRepository.ResetFailCountAsync(user);
+
+            var jwtToken = GenerateJwtToken(user);
+            var refreshToken = GenerateRefreshToken(ipAddress);
+
+            // 리프레시 토큰 저장
+            await userRepository.AddRefreshTokenAsync(user, refreshToken);
+
+            try
             {
-                try
-                {
-                    dataContext.SaveChanges();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Could not save token data.");
-                }
+
+                //await userRepository.CommitAsync();
+                await userRepository.CommitAsync();
+                logger.LogInformation("Logged in completed");
             }
+            catch (Exception ex)
+            {
+                //await userRepository.RollbackAsync();
+                await userRepository.RollbackAsync();
+                logger.LogError(ex, "Could not process logged in data.");
+
+                return new AuthenticateResponse
+                {
+                    Status = HttpStatusCode.InternalServerError,
+                    Message = "Could not process logged in data"
+                };
+            }
+
+            return new AuthenticateResponse
+            {
+                Status = HttpStatusCode.OK,
+                Data = CreateAuthenticateResponse(user, jwtToken, refreshToken.Token),
+            };
+
         }
 
-        public IEnumerable<User> GetAll()
+        public async Task<IEnumerable<User>> GetAllAsync(int page = 1, int count = 10)
         {
-            return dataContext.Users.Select(u => new User
+            var users = await userRepository.GetUsersAsync(null, page, count, false);
+
+            return users.Select(u => new User
             {
                 Id = u.Id,
                 FirstName = u.FirstName,
@@ -164,18 +170,14 @@ namespace SampleService.Authorization.App.Services
             });
         }
 
-        public User GetById(string id)
+        public Task<User> GetByIdAsync(string id)
         {
-            return dataContext.Users
-                .Include(x => x.RefreshTokens)
-                .FirstOrDefault(x => x.Id == id);
+            return userRepository.FindByIdAsync(id);
         }
 
-        public User GetByUsername(string username)
+        public Task<User> GetByUsernameAsync(string username)
         {
-            return dataContext.Users
-                .Include(x => x.RefreshTokens)
-                .FirstOrDefault(x => x.UserName == username);
+            return userRepository.FindByUsernameAsync(username);
         }
 
         /// <summary>
@@ -184,13 +186,15 @@ namespace SampleService.Authorization.App.Services
         /// <param name="token">refresh token</param>
         /// <param name="ipAddress"></param>
         /// <returns></returns>
-        public AuthenticateResponse RefreshToken(string token)
+        public async Task<AuthenticateResponse> RefreshTokenAsync(string token)
         {
             var ipAddress = GetIpAddress();
-            var user = dataContext.Users
-                .Include(x => x.RefreshTokens)
-                //.FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token && t.IsActive));
-                .FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
+            //var user = dataContext.Users
+            //    .Include(x => x.RefreshTokens)
+            //    //.FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token && t.IsActive));
+            //    .FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
+
+            var user = await userRepository.FindByRefreshTokenAsync(token);
 
             if (user == null)
             {
@@ -216,7 +220,7 @@ namespace SampleService.Authorization.App.Services
                 return new AuthenticateResponse
                 {
                     Status = HttpStatusCode.NotFound,
-                    Message = "Could not find a user",
+                    Message = "Token has been expired. Please authenticate again.",
                 };
             }
 
@@ -227,15 +231,24 @@ namespace SampleService.Authorization.App.Services
             refreshToken.RevokedByIp = ipAddress;
             refreshToken.ReplacedByToken = token;
 
-            user.RefreshTokens.Add(newRefreshToken);
-            dataContext.Update(user);
+            await userRepository.BeginTranAsync();
+
+
+            await userRepository.AddRefreshTokenAsync(user, newRefreshToken);
+
+            await userRepository.RevokeRefreshTokenAsync(user, refreshToken);
+            //user.RefreshTokens.Add(newRefreshToken);
+            //dataContext.Update(user);
 
             try
             {
-                dataContext.SaveChanges();
+                await userRepository.CommitAsync();
+                //await transaction.CommitAsync();
             }
             catch (Exception ex)
             {
+                await userRepository.RollbackAsync();
+                //await transaction.RollbackAsync();
                 logger.LogError(ex, "Could not save the new refresh token data");
                 return new AuthenticateResponse
                 {
@@ -249,6 +262,7 @@ namespace SampleService.Authorization.App.Services
                 Status = HttpStatusCode.OK,
                 Data = CreateAuthenticateResponse(user, jwtToken, newRefreshToken.Token),
             };
+
         }
 
         /// <summary>
@@ -257,13 +271,15 @@ namespace SampleService.Authorization.App.Services
         /// <param name="token">refresh token to Revoke</param>
         /// <param name="ipAddress">ip address</param>
         /// <returns></returns>
-        public AuthenticateResponse RevokeToken(string token)
+        public async Task<AuthenticateResponse> RevokeTokenAsync(string token)
         {
             string ipAddress = GetIpAddress();
 
-            var user = dataContext.Users
-                .Include(x => x.RefreshTokens)
-                .FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token ));
+            //var user = dataContext.Users
+            //    .Include(x => x.RefreshTokens)
+            //    .FirstOrDefault(u => u.RefreshTokens.Any(t => t.Token == token ));
+
+            var user = await userRepository.FindByRefreshTokenAsync(token);
 
             if (user == null)
             {
@@ -297,11 +313,13 @@ namespace SampleService.Authorization.App.Services
             refreshToken.Revoked = DateTimeOffset.UtcNow;
             refreshToken.RevokedByIp = ipAddress;
 
-            dataContext.Update(user);
+            //dataContext.Update(user);
+
 
             try
             {
-                dataContext.SaveChanges();
+                //dataContext.SaveChanges();
+                await userRepository.RevokeRefreshTokenAsync(user, refreshToken);
             }
             catch (Exception ex)
             {
@@ -320,9 +338,9 @@ namespace SampleService.Authorization.App.Services
             };
         }
 
-        public async Task<AppResponse> CreateAsync(CreateUserRequest model, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<AppResponse> CreateAsync(CreateUserRequest model, CancellationToken cancellationToken = default)
         {
-            var userFindResult = GetByUsername(model.UserName);
+            var userFindResult = await GetByUsernameAsync(model.UserName);
             if (userFindResult != null)
             {
                 return new CreateUserResponse
@@ -344,16 +362,31 @@ namespace SampleService.Authorization.App.Services
                 FailCount = 0,
             };
 
-            dataContext.Add(user);
+            //dataContext.Add(user);
 
-            await dataContext.SaveChangesAsync(cancellationToken);
+            //await dataContext.SaveChangesAsync(cancellationToken);
 
-            return new CreateUserResponse { Status = HttpStatusCode.Created, };
+            try
+            {
+                await userRepository.CreateAsync(user);
+
+
+                return new CreateUserResponse { Status = HttpStatusCode.Created, };
+            }
+            catch (Exception)
+            {
+                return new AppResponse
+                {
+                    Status = HttpStatusCode.InternalServerError,
+                    Message = "Could not process to save a user data.",
+                };
+            }
+
         }
 
-        public async Task<AppResponse> UpdateAsync(UpdateUserRequest model, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<AppResponse> UpdateAsync(UpdateUserRequest model, CancellationToken cancellationToken = default)
         {
-            var user = GetByUsername(model.UserName);
+            var user = await GetByUsernameAsync(model.UserName);
 
             if (user == null)
             {
@@ -367,16 +400,32 @@ namespace SampleService.Authorization.App.Services
             user.FirstName = model.FirstName;
             user.LastName = model.LastName;
 
-            dataContext.Update(user);
+            //dataContext.Update(user);
 
-            await dataContext.SaveChangesAsync(cancellationToken);
+            //await dataContext.SaveChangesAsync(cancellationToken);
 
-            return new AppResponse { Status = HttpStatusCode.Accepted };
+            try
+            {
+                await userRepository.UpdateAsync(user);
+
+                return new AppResponse { Status = HttpStatusCode.Accepted };
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not process to save a user data.");
+                return new AppResponse
+                {
+                    Status = HttpStatusCode.InternalServerError,
+                    Message = "Could not process to save a user data.",
+                };
+            }
+
+
         }
 
-        public async Task<AppResponse> CloseAccountAsync(CloseAccountRequest model, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<AppResponse> CloseAccountAsync(CloseAccountRequest model, CancellationToken cancellationToken = default)
         {
-            var user = GetByUsername(model.UserName);
+            var user = await GetByUsernameAsync(model.UserName);
 
             if (user != null)
             {
@@ -386,13 +435,28 @@ namespace SampleService.Authorization.App.Services
                     Message = "Could not find a user",
                 };
             }
-            user.IsEnabled = false;
+            //user.IsEnabled = false;
 
-            dataContext.Update(user);
+            //dataContext.Update(user);
 
-            await dataContext.SaveChangesAsync(cancellationToken);
+            //await dataContext.SaveChangesAsync(cancellationToken);
 
-            return new AppResponse { Status = HttpStatusCode.Accepted };
+            try
+            {
+                await userRepository.CloseAccountAsync(user);
+
+                return new AppResponse { Status = HttpStatusCode.Accepted };
+            }
+            catch (Exception)
+            {
+
+                return new AppResponse
+                {
+                    Status = HttpStatusCode.InternalServerError,
+                    Message = "Could not process to save a user data.",
+                };
+            }
+
         }
 
         /// <summary>

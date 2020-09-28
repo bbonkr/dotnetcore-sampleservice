@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -22,6 +23,7 @@ using SampleService.Authorization.App.Services;
 using SampleService.Authorization.Data;
 
 using SampleService.Graphql;
+using SampleService.Repositories;
 
 namespace SampleService.Authorization.App
 {
@@ -49,7 +51,8 @@ namespace SampleService.Authorization.App
                 });
             }, ServiceLifetime.Singleton);
 
-            services.AddSingleton<DataContext>();
+            services.TryAddSingleton<DataContext>();
+          
 
             services.AddCors();
 
@@ -90,9 +93,10 @@ namespace SampleService.Authorization.App
                 };
             });
 
-            services.AddScoped<IUserService, UserService>();
-            services.AddScoped<IHasher, Hasher>();
-
+            services.TryAddTransient<IUserService, UserService>();
+            services.TryAddTransient<IHasher, Hasher>();
+            services.TryAddTransient<IUserRepository, UserRepository>();
+            
             services.AddGraphql();
 
             services.Configure<KestrelServerOptions>(options => {
