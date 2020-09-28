@@ -13,7 +13,7 @@ namespace SampleService.Services.Schema
         public UserSchema(
             UserQuery query,
             IDependencyResolver resolver
-            )
+            ) : base(resolver)
         {
             this.Query = query;
             this.DependencyResolver = resolver;

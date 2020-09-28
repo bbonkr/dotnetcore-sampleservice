@@ -117,6 +117,7 @@ namespace SampleService.Authorization.App.Services
                 };
             }
 
+
             await userRepository.BeginTranAsync();
             // 실패횟수 초기화
             await userRepository.ResetFailCountAsync(user);
@@ -130,11 +131,13 @@ namespace SampleService.Authorization.App.Services
             try
             {
 
+                //await userRepository.CommitAsync();
                 await userRepository.CommitAsync();
                 logger.LogInformation("Logged in completed");
             }
             catch (Exception ex)
             {
+                //await userRepository.RollbackAsync();
                 await userRepository.RollbackAsync();
                 logger.LogError(ex, "Could not process logged in data.");
 
@@ -230,6 +233,7 @@ namespace SampleService.Authorization.App.Services
 
             await userRepository.BeginTranAsync();
 
+
             await userRepository.AddRefreshTokenAsync(user, newRefreshToken);
 
             await userRepository.RevokeRefreshTokenAsync(user, refreshToken);
@@ -239,10 +243,12 @@ namespace SampleService.Authorization.App.Services
             try
             {
                 await userRepository.CommitAsync();
+                //await transaction.CommitAsync();
             }
             catch (Exception ex)
             {
                 await userRepository.RollbackAsync();
+                //await transaction.RollbackAsync();
                 logger.LogError(ex, "Could not save the new refresh token data");
                 return new AuthenticateResponse
                 {
@@ -256,6 +262,7 @@ namespace SampleService.Authorization.App.Services
                 Status = HttpStatusCode.OK,
                 Data = CreateAuthenticateResponse(user, jwtToken, newRefreshToken.Token),
             };
+
         }
 
         /// <summary>
@@ -264,7 +271,7 @@ namespace SampleService.Authorization.App.Services
         /// <param name="token">refresh token to Revoke</param>
         /// <param name="ipAddress">ip address</param>
         /// <returns></returns>
-        public async  Task<AuthenticateResponse> RevokeTokenAsync(string token)
+        public async Task<AuthenticateResponse> RevokeTokenAsync(string token)
         {
             string ipAddress = GetIpAddress();
 
@@ -307,7 +314,7 @@ namespace SampleService.Authorization.App.Services
             refreshToken.RevokedByIp = ipAddress;
 
             //dataContext.Update(user);
-            
+
 
             try
             {
@@ -363,6 +370,7 @@ namespace SampleService.Authorization.App.Services
             {
                 await userRepository.CreateAsync(user);
 
+
                 return new CreateUserResponse { Status = HttpStatusCode.Created, };
             }
             catch (Exception)
@@ -373,7 +381,7 @@ namespace SampleService.Authorization.App.Services
                     Message = "Could not process to save a user data.",
                 };
             }
-            
+
         }
 
         public async Task<AppResponse> UpdateAsync(UpdateUserRequest model, CancellationToken cancellationToken = default)
@@ -412,7 +420,7 @@ namespace SampleService.Authorization.App.Services
                 };
             }
 
-            
+
         }
 
         public async Task<AppResponse> CloseAccountAsync(CloseAccountRequest model, CancellationToken cancellationToken = default)
@@ -448,7 +456,7 @@ namespace SampleService.Authorization.App.Services
                     Message = "Could not process to save a user data.",
                 };
             }
-            
+
         }
 
         /// <summary>

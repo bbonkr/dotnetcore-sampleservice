@@ -9,18 +9,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
+using SampleService.Authorization.Data;
 using SampleService.Data;
 using SampleService.Entities;
 
 namespace SampleService.Repositories
 {
-    public interface IRepository
+    public interface IRepository : IDisposable
     {
         Task BeginTranAsync(CancellationToken cancellationToken = default(CancellationToken));
 
         Task CommitAsync(CancellationToken cancellationToken = default(CancellationToken));
 
         Task RollbackAsync(CancellationToken cancellationToken = default(CancellationToken));
+
+        //Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 
     public interface IUserRepository: IRepository
@@ -52,40 +55,77 @@ namespace SampleService.Repositories
         Task RevokeRefreshTokenAsync(User user, RefreshToken refreshToken,  CancellationToken cancellationToken = default(CancellationToken));
     }
 
-    public class UserRepository : IUserRepository
+    public abstract class RepositoryBase: IRepository
     {
-        public const int FAIL_COUNT_TO_LOCK = 5;
-
-        public UserRepository(DataContext dataContext, ILoggerFactory loggerFactory)
+        public RepositoryBase(
+            DataContext dataContext,
+            ILoggerFactory loggerFactory)
         {
             this.dataContext = dataContext;
-            logger = loggerFactory.CreateLogger<UserRepository>();
+            logger = loggerFactory.CreateLogger<RepositoryBase>();
         }
 
         public async Task BeginTranAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (transaction != null)
-            {
-                await transaction.RollbackAsync(cancellationToken);
+            //if (transaction != null)
+            //{
+            //    await transaction.RollbackAsync(cancellationToken);
+            //}
 
-            }
             transaction = await this.dataContext.Database.BeginTransactionAsync(cancellationToken);
+
+            //return transaction;
         }
 
-        public async Task CommitAsync(CancellationToken cancellationToken = default(CancellationToken))
+       public async Task CommitAsync(CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if(transaction != null) {
+                await transaction.CommitAsync(cancellationToken);
+                await transaction.DisposeAsync();
+
+                transaction = null;
+            }
+        }
+
+        public async Task RollbackAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
             if (transaction != null)
             {
-                await transaction.CommitAsync(cancellationToken);
+                await transaction.RollbackAsync(cancellationToken);
+                await transaction.DisposeAsync();
+
+                transaction = null;
             }
         }
 
-        public async Task RollbackAsync(CancellationToken cancellationToken = default(CancellationToken)) { 
-        
-            if(transaction != null)
+        //public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        //{
+        //    return dataContext.SaveChangesAsync(cancellationToken);
+        //}
+
+        public void Dispose()
+        {
+            if (transaction != null)
             {
-                await transaction.RollbackAsync(cancellationToken);
+                transaction.Dispose();
             }
+
+            
+        }
+
+        protected readonly DataContext dataContext;
+        protected IDbContextTransaction transaction = null;
+
+        private readonly ILogger logger;
+    }
+
+    public class UserRepository : RepositoryBase, IUserRepository
+    {
+        public const int FAIL_COUNT_TO_LOCK = 5;
+
+        public UserRepository(DataContext dataContext, ILoggerFactory loggerFactory):base(dataContext, loggerFactory)
+        {
+            logger = loggerFactory.CreateLogger<UserRepository>();
         }
 
         public Task<User> FindByIdAsync(string id, bool includesReferenceEntities = false)
@@ -159,75 +199,60 @@ namespace SampleService.Repositories
         {
             dataContext.Add(user);
 
-            if(transaction == null)
-            {
-                await dataContext.SaveChangesAsync(cancellationToken);
-            }
+            await dataContext.SaveChangesAsync(cancellationToken);
         }
 
         public async Task UpdateAsync(User user, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var entity=dataContext.Entry(user);
-            
-            entity.Property(x => x.FirstName).IsModified = true;
-            entity.Property(x => x.LastName).IsModified = true;
+            var entry = await FindByIdAsync(user.Id);
 
-            dataContext.Update(user);
+            entry.FirstName = user.FirstName;
+            entry.LastName = user.LastName;
 
-            if(transaction == null) {
-                await dataContext.SaveChangesAsync(cancellationToken);
-            }
+            dataContext.Update(entry);
+
+            await dataContext.SaveChangesAsync(cancellationToken);
         }
 
         public async Task CloseAccountAsync(User user, CancellationToken cancellationToken = default(CancellationToken))
         {
-            dataContext.Entry(user);
+            var entry = await FindByIdAsync(user.Id);
 
-            user.IsEnabled = false;
-            user.RefreshTokens.Clear();            
+            entry.IsEnabled = false;
+            entry.RefreshTokens.Clear();            
 
-            dataContext.Update(user);
+            dataContext.Update(entry);
 
-            if (transaction == null)
-            {
-                await dataContext.SaveChangesAsync(cancellationToken);
-            }
+            await dataContext.SaveChangesAsync(cancellationToken);
         }
 
         public async Task UpdateFailCountAsync(User user, int count = -1, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (count == 0 || user.FailCount <= FAIL_COUNT_TO_LOCK)
             {
-                var candidate = dataContext.Entry(user);
+                var entry = await FindByIdAsync(user.Id);
 
                 if (count > 0)
                 {
-                    user.FailCount = count;
+                    entry.FailCount = count;
                 }
                 else
                 {
-                    user.FailCount++;
+                    entry.FailCount++;
                 }
-
-                candidate.Property(x => x.FailCount).IsModified = true;
 
                 if(count == 0)
                 {
-                    user.IsLocked = false;
-                    candidate.Property(x => x.IsLocked).IsModified = true;
+                    entry.IsLocked = false;
                 }
                 else if(user.FailCount >= FAIL_COUNT_TO_LOCK)
                 {
-                    user.IsLocked = true;
-                    candidate.Property(x => x.IsLocked).IsModified = true;
+                    entry.IsLocked = true;
                 }
 
-                dataContext.Update(user);
+                dataContext.Update(entry);
 
-                if (transaction == null)
-                {
-                    await dataContext.SaveChangesAsync(cancellationToken);
-                }
+                await dataContext.SaveChangesAsync(cancellationToken);
             }
         }
 
@@ -238,17 +263,19 @@ namespace SampleService.Repositories
 
         public async Task AddRefreshTokenAsync(User user, RefreshToken refreshToken, CancellationToken cancellationToken = default(CancellationToken))
         {
-            user.RefreshTokens.Add(refreshToken);
+            var entry = await FindByIdAsync(user.Id, true);
 
-            if(transaction == null)
-            {
-                await dataContext.SaveChangesAsync(cancellationToken);
-            }
+            entry.RefreshTokens.Add(refreshToken);
+
+            await dataContext.SaveChangesAsync(cancellationToken);
         }
 
         public async Task RevokeRefreshTokenAsync(User user, RefreshToken refreshToken, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var revokedRefreshToken=user.RefreshTokens.FirstOrDefault(x => x.Token == refreshToken.Token);
+            var entry = await FindByIdAsync(user.Id, true);
+
+            var revokedRefreshToken = entry.RefreshTokens
+                .FirstOrDefault(x => x.Token == refreshToken.Token);
 
             revokedRefreshToken.Revoked = DateTimeOffset.UtcNow;
             revokedRefreshToken.RevokedByIp = refreshToken.CreatedByIp;
@@ -256,16 +283,9 @@ namespace SampleService.Repositories
 
             dataContext.Update(user);
 
-            if(transaction == null)
-            {
-                await dataContext.SaveChangesAsync(cancellationToken);
-            }
+            await dataContext.SaveChangesAsync(cancellationToken);
         }
 
-
-        private readonly DataContext dataContext;
-        private readonly ILogger logger;
-
-        private IDbContextTransaction transaction = null;
+        protected readonly ILogger logger;
     }
 }

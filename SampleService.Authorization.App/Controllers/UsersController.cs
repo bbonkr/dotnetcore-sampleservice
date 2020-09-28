@@ -16,7 +16,7 @@ namespace SampleService.Authorization.App.Controllers
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
-    public class UsersController:AppApiController
+    public class UsersController : AppApiController
     {
         private readonly IUserService userService;
 
@@ -27,7 +27,7 @@ namespace SampleService.Authorization.App.Controllers
 
         [AllowAnonymous]
         [HttpPost("authenticate")]
-        public async Task< IActionResult > Authenticate([FromBody] AuthenticateRequest model)
+        public async Task<IActionResult> Authenticate([FromBody] AuthenticateRequest model)
         {
             var response = await userService.AuthenticateAsync(model);
 
@@ -43,7 +43,7 @@ namespace SampleService.Authorization.App.Controllers
 
         [AllowAnonymous]
         [HttpPost("refresh-token")]
-        public async Task< IActionResult> RefreshToken([FromBody] RefreshTokenRequest model)
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest model)
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
@@ -66,7 +66,7 @@ namespace SampleService.Authorization.App.Controllers
         }
 
         [HttpPost("revoke-token")]
-        public async Task< IActionResult> Revoke([FromBody] RevokeTokenRequest model)
+        public async Task<IActionResult> Revoke([FromBody] RevokeTokenRequest model)
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
@@ -89,7 +89,7 @@ namespace SampleService.Authorization.App.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task< IActionResult> GetById(string id)
+        public async Task<IActionResult> GetById(string id)
         {
             var status = HttpStatusCode.OK;
             var message = "";
@@ -105,10 +105,10 @@ namespace SampleService.Authorization.App.Controllers
         }
 
         [HttpGet("{id}/refresh-tokens")]
-        public async Task< IActionResult> GetRefreshTokens(string id)
+        public async Task<IActionResult> GetRefreshTokens(string id)
         {
             var user = await userService.GetByIdAsync(id);
-            if(user == null)
+            if (user == null)
             {
                 return StatusCodeResult(HttpStatusCode.NotFound, "Could not find a user");
             }
