@@ -5,13 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GraphQL" Version="2.4.0" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\SampleService.Authorization.Data\SampleService.Authorization.Data.csproj" />
     <ProjectReference Include="..\SampleService.Entities\SampleService.Entities.csproj" />
-    <ProjectReference Include="..\SampleService.Repositories\SampleService.Repositories.csproj" />
   </ItemGroup>
 
 </Project>

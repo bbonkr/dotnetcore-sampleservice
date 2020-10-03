@@ -8,10 +8,13 @@ using SampleService.Entities;
 
 namespace SampleService.Services.Schema
 {
-    public class UserType: ObjectGraphType<User>
+    public class UserType : ObjectGraphType<User>
     {
         public UserType()
         {
+            Name = "User";
+            Description = "User";
+            
             this.Field(x => x.Id);
             this.Field(x => x.UserName);
             this.Field(x => x.LastName);

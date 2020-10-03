@@ -16,7 +16,7 @@ namespace SampleService.Authorization.App.Controllers
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
-    public class UsersController:AppApiController
+    public class UsersController : AppApiController
     {
         private readonly IUserService userService;
 
@@ -27,9 +27,9 @@ namespace SampleService.Authorization.App.Controllers
 
         [AllowAnonymous]
         [HttpPost("authenticate")]
-        public IActionResult Authenticate([FromBody] AuthenticateRequest model)
+        public async Task<IActionResult> Authenticate([FromBody] AuthenticateRequest model)
         {
-            var response = userService.Authenticate(model);
+            var response = await userService.AuthenticateAsync(model);
 
             if (!response.IsSuccessful)
             {
@@ -43,7 +43,7 @@ namespace SampleService.Authorization.App.Controllers
 
         [AllowAnonymous]
         [HttpPost("refresh-token")]
-        public IActionResult RefreshToken([FromBody] RefreshTokenRequest model)
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest model)
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
@@ -52,7 +52,7 @@ namespace SampleService.Authorization.App.Controllers
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is required.");
             }
 
-            var response = userService.RefreshToken(token);
+            var response = await userService.RefreshTokenAsync(token);
 
             if (!response.IsSuccessful)
             {
@@ -66,7 +66,7 @@ namespace SampleService.Authorization.App.Controllers
         }
 
         [HttpPost("revoke-token")]
-        public IActionResult Revoke([FromBody] RevokeTokenRequest model)
+        public async Task<IActionResult> Revoke([FromBody] RevokeTokenRequest model)
         {
             var token = model.Token ?? Request.Cookies["refreshToken"];
 
@@ -75,26 +75,26 @@ namespace SampleService.Authorization.App.Controllers
                 return StatusCodeResult(HttpStatusCode.BadRequest, "Token is Required");
             }
 
-            var response = userService.RevokeToken(token);
+            var response = await userService.RevokeTokenAsync(token);
 
             return StatusCodeResult(response);
         }
 
         [HttpGet]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            var users = userService.GetAll();
+            var users = await userService.GetAllAsync();
 
             return StatusCodeResult(HttpStatusCode.OK, users);
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetById(string id)
+        public async Task<IActionResult> GetById(string id)
         {
             var status = HttpStatusCode.OK;
             var message = "";
 
-            var user = userService.GetById(id);
+            var user = await userService.GetByIdAsync(id);
             if (user == null)
             {
                 status = HttpStatusCode.NotFound;
@@ -105,10 +105,10 @@ namespace SampleService.Authorization.App.Controllers
         }
 
         [HttpGet("{id}/refresh-tokens")]
-        public IActionResult GetRefreshTokens(string id)
+        public async Task<IActionResult> GetRefreshTokens(string id)
         {
-            var user = userService.GetById(id);
-            if(user == null)
+            var user = await userService.GetByIdAsync(id);
+            if (user == null)
             {
                 return StatusCodeResult(HttpStatusCode.NotFound, "Could not find a user");
             }
