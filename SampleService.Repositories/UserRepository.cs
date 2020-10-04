@@ -108,9 +108,7 @@ namespace SampleService.Repositories
             if (transaction != null)
             {
                 transaction.Dispose();
-            }
-
-            
+            }            
         }
 
         protected readonly DataContext dataContext;
